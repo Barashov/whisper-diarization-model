@@ -42,13 +42,16 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        use_ffmpeg: bool = Input(
-            description="if true: convert file to wav. default true",
-            default=True
-        ),
+        file_path: str = Input(
+            description='file path in docker volume'),
 
-        file: str = Input(
+        file_url: str = Input(
             description="Or provide: A direct audio file URL"),
+
+        use_ffmpeg: bool = Input(
+                description="if true: convert file to wav. default true",
+                default=True
+            ),
 
         group_segments: bool = Input(
             description=
@@ -68,24 +71,25 @@ class Predictor(BasePredictor):
             raise RuntimeError("Provide either file_string, file or file_url") """
         temp_wav_filename = f"temp-{time.time_ns()}.wav"
         try:
+            if file_url:
+                response = requests.get(file_url)
+                temp_audio_filename = f"temp-{time.time_ns()}.audio"
+                if use_ffmpeg:
+                    with open(temp_audio_filename, 'wb') as file:
+                        file.write(response.content)
 
-            response = requests.get(file)
-            temp_audio_filename = f"temp-{time.time_ns()}.audio"
-            if use_ffmpeg:
-                with open(temp_audio_filename, 'wb') as file:
-                    file.write(response.content)
+                    subprocess.run([
+                        'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
+                        '1', '-c:a', 'pcm_s16le', temp_wav_filename
+                    ])
+                else:
+                    with open(temp_wav_filename, 'wb') as file:
+                        file.write(response.content)
 
-                subprocess.run([
-                    'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
-                    '1', '-c:a', 'pcm_s16le', temp_wav_filename
-                ])
+                if os.path.exists(temp_audio_filename):
+                    os.remove(temp_audio_filename)
             else:
-                with open(temp_wav_filename, 'wb') as file:
-                    file.write(response.content)
-
-            if os.path.exists(temp_audio_filename):
-                os.remove(temp_audio_filename)
-
+                temp_wav_filename = file_path
             segments = self.speech_to_text(temp_wav_filename,
                                            prompt, 
                                            offset_seconds,
