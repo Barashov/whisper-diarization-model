@@ -4,7 +4,6 @@ import base64
 import contextlib
 import datetime
 import json
-import magic
 import mimetypes
 import numpy as np
 import subprocess
