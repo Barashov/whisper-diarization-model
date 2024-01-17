@@ -42,10 +42,12 @@ class Predictor(BasePredictor):
     def predict(
         self,
         file_path: str = Input(
-            description='file path in docker volume'),
+            description='file path in docker volume',
+            default=''),
 
         file_url: str = Input(
-            description="Or provide: A direct audio file URL"),
+            description="Or provide: A direct audio file URL",
+            default=''),
 
         use_ffmpeg: bool = Input(
                 description="if true: convert file to wav. default true",
