@@ -43,11 +43,11 @@ class Predictor(BasePredictor):
         self,
         file_path: str = Input(
             description='file path in docker volume',
-            default=''),
+            default=None),
 
         file_url: str = Input(
             description="Or provide: A direct audio file URL",
-            default=''),
+            default=None),
 
         use_ffmpeg: bool = Input(
                 description="if true: convert file to wav. default true",
@@ -101,6 +101,7 @@ class Predictor(BasePredictor):
             return Output(segments=segments, error_text=None)
 
         except Exception as e:
+            print(e)
             return Output(segments=None, error_text=e)
 
         finally:
