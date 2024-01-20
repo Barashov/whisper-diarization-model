@@ -31,10 +31,6 @@ class Predictor(BasePredictor):
                 description="Or provide: A direct audio file URL",
                 default=None),
 
-        use_ffmpeg: bool = Input(
-                description="if true: convert file to wav. default true",
-                default=True),
-
     ) -> Output:
         """Run a single prediction on the model"""
         # Check if either filestring, filepath or file is provided, but only 1 of them
@@ -45,17 +41,15 @@ class Predictor(BasePredictor):
             if file_url:
                 response = requests.get(file_url)
                 temp_audio_filename = f"temp-{time.time_ns()}.audio"
-                if use_ffmpeg:
-                    with open(temp_audio_filename, 'wb') as file:
+
+                with open(temp_audio_filename, 'wb') as file:
                         file.write(response.content)
 
-                    subprocess.run([
-                        'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
-                        '1', '-c:a', 'pcm_s16le', temp_wav_filename
-                    ])
-                else:
-                    with open(temp_wav_filename, 'wb') as file:
-                        file.write(response.content)
+                subprocess.run([
+                    'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
+                    '1', '-c:a', 'pcm_s16le', temp_wav_filename
+                ])
+
 
                 if os.path.exists(temp_audio_filename):
                     os.remove(temp_audio_filename)
