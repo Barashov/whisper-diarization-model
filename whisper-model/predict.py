@@ -6,7 +6,7 @@ import os
 import requests
 import time
 import torch
-
+import subprocess
 from cog import BasePredictor, BaseModel, Input, File, Path
 from faster_whisper import WhisperModel
 
@@ -35,11 +35,6 @@ class Predictor(BasePredictor):
                 description="Or provide: A direct audio file URL",
                 default=None),
 
-            use_ffmpeg: bool = Input(
-                description="if true: convert file to wav. default true",
-                default=True
-            ),
-
             prompt: str = Input(description="Prompt, to be used as context",
                                 default="Some people speaking."),
             offset_seconds: int = Input(
@@ -56,17 +51,14 @@ class Predictor(BasePredictor):
             if file_url:
                 response = requests.get(file_url)
                 temp_audio_filename = f"temp-{time.time_ns()}.audio"
-                if use_ffmpeg:
-                    with open(temp_audio_filename, 'wb') as file:
+
+                with open(temp_audio_filename, 'wb') as file:
                         file.write(response.content)
 
-                    subprocess.run([
-                        'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
-                        '1', '-c:a', 'pcm_s16le', temp_wav_filename
-                    ])
-                else:
-                    with open(temp_wav_filename, 'wb') as file:
-                        file.write(response.content)
+                subprocess.run([
+                    'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
+                    '1', '-c:a', 'pcm_s16le', temp_wav_filename
+                ])
 
                 if os.path.exists(temp_audio_filename):
                     os.remove(temp_audio_filename)
@@ -95,8 +87,7 @@ class Predictor(BasePredictor):
     def speech_to_text(self,
                        audio_file_wav,
                        prompt="People talking.",
-                       offset_seconds=0,
-                       group_segments=True):
+                       offset_seconds=0):
         time_start = time.time()
 
         # Transcribe audio
