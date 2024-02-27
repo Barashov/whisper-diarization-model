@@ -40,69 +40,59 @@ class Predictor(BasePredictor):
                 torch.device("cuda"))
 
     def predict(
-        self,
-        file_path: str = Input(
-            description='file path in docker volume',
-            default=None),
-
-        file_url: str = Input(
-            description="Or provide: A direct audio file URL",
-            default=None),
-
-        use_ffmpeg: bool = Input(
-                description="if true: convert file to wav. default true",
-                default=True
-            ),
-
-        group_segments: bool = Input(
-            description=
-            "Group segments of same speaker shorter apart than 2 seconds",
-            default=True),
-
-        prompt: str = Input(description="Prompt, to be used as context",
-                            default="Some people speaking."),
-        offset_seconds: int = Input(
-            description="Offset in seconds, used for chunked inputs",
-            default=0,
-            ge=0)
+            self,
+            file_string: str = Input(
+                description="Either provide: Base64 encoded audio file,",
+                default=None),
+            file_url: str = Input(
+                description="Or provide: A direct audio file URL", default=None),
+            file: Path = Input(description="Or an audio file", default=None),
+            group_segments: bool = Input(
+                description=
+                "Group segments of same speaker shorter apart than 2 seconds",
+                default=True),
+            num_speakers: int = Input(description="Number of speakers",
+                                      ge=1,
+                                      le=50,
+                                      default=2),
+            prompt: str = Input(description="Prompt, to be used as context",
+                                default="Some people speaking."),
+            offset_seconds: int = Input(
+                description="Offset in seconds, used for chunked inputs",
+                default=0,
+                ge=0)
     ) -> Output:
         """Run a single prediction on the model"""
         # Check if either filestring, filepath or file is provided, but only 1 of them
         """ if sum([file_string is not None, file_url is not None, file is not None]) != 1:
             raise RuntimeError("Provide either file_string, file or file_url") """
-        temp_wav_filename = f"temp-{time.time_ns()}.wav"
+
         try:
-            if file_url:
+            # Generate a temporary filename
+            temp_wav_filename = f"temp-{time.time_ns()}.wav"
+
+            if file is not None:
+                subprocess.run([
+                    'ffmpeg', '-i', file, '-ar', '16000', '-ac',
+                    '1', '-c:a', 'pcm_s16le', temp_wav_filename
+                ])
+
+            elif file_url is not None:
                 response = requests.get(file_url)
                 temp_audio_filename = f"temp-{time.time_ns()}.audio"
-                if use_ffmpeg:
-                    with open(temp_audio_filename, 'wb') as file:
-                        file.write(response.content)
+                with open(temp_wav_filename, 'wb') as file:
+                    file.write(response.content)
 
-                    subprocess.run([
-                        'ffmpeg', '-i', temp_audio_filename, '-ar', '16000', '-ac',
-                        '1', '-c:a', 'pcm_s16le', temp_wav_filename
-                    ])
-                else:
-                    with open(temp_wav_filename, 'wb') as file:
-                        file.write(response.content)
-
-                if os.path.exists(temp_audio_filename):
-                    os.remove(temp_audio_filename)
-            else:
-                temp_wav_filename = file_path
             segments = self.speech_to_text(temp_wav_filename,
-                                           prompt, 
-                                           offset_seconds,
+                                           prompt, offset_seconds,
                                            group_segments)
 
-            print(f'done with transcription')
+            print(f'done with inference')
             # Return the results as a JSON object
-            return Output(segments=segments, error_text=None)
+            return Output(segments=segments)
 
         except Exception as e:
-            print(e)
-            return Output(segments=None, error_text=e)
+            raise RuntimeError("Error Running inference with local model", e)
 
         finally:
             # Clean up
