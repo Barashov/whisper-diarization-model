@@ -21,8 +21,7 @@ from pyannote.audio import Pipeline
 
 
 class Output(BaseModel):
-    error_text: str | None
-    segments: list | None
+    segments: list
 
 
 class Predictor(BasePredictor):
@@ -39,60 +38,37 @@ class Predictor(BasePredictor):
             use_auth_token="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").to(
                 torch.device("cuda"))
 
-    def predict(
-            self,
-            file_string: str = Input(
-                description="Either provide: Base64 encoded audio file,",
-                default=None),
-            file_url: str = Input(
-                description="Or provide: A direct audio file URL", default=None),
-            file: Path = Input(description="Or an audio file", default=None),
-            group_segments: bool = Input(
-                description=
-                "Group segments of same speaker shorter apart than 2 seconds",
-                default=True),
-            num_speakers: int = Input(description="Number of speakers",
-                                      ge=1,
-                                      le=50,
-                                      default=2),
-            prompt: str = Input(description="Prompt, to be used as context",
-                                default="Some people speaking."),
-            offset_seconds: int = Input(
-                description="Offset in seconds, used for chunked inputs",
-                default=0,
-                ge=0)
-    ) -> Output:
-        """Run a single prediction on the model"""
-        # Check if either filestring, filepath or file is provided, but only 1 of them
-        """ if sum([file_string is not None, file_url is not None, file is not None]) != 1:
-            raise RuntimeError("Provide either file_string, file or file_url") """
+    def predict(self,
+                file_path: str = Input(description='file path in docker volume',
+                                       default=''),
 
+                file_url: str = Input(description="Or provide: A direct audio file URL",
+                                      default=''),
+
+                prompt: str = Input(description="Prompt, to be used as context",
+                                    default="Some people speaking."),
+                offset_seconds: int = Input(description="Offset in seconds, used for chunked inputs",
+                                            default=0,
+                                            ge=0)) -> Output:
+
+        temp_wav_filename = f"temp-{time.time_ns()}.wav"
         try:
-            # Generate a temporary filename
-            temp_wav_filename = f"temp-{time.time_ns()}.wav"
-
-            if file is not None:
-                subprocess.run([
-                    'ffmpeg', '-i', file, '-ar', '16000', '-ac',
-                    '1', '-c:a', 'pcm_s16le', temp_wav_filename
-                ])
-
-            elif file_url is not None:
+            if file_url:
                 response = requests.get(file_url)
-                temp_audio_filename = f"temp-{time.time_ns()}.audio"
+
                 with open(temp_wav_filename, 'wb') as file:
                     file.write(response.content)
+            else:
+                temp_wav_filename = file_path
 
             segments = self.speech_to_text(temp_wav_filename,
-                                           prompt, offset_seconds,
-                                           group_segments)
+                                           prompt=prompt,
+                                           offset_seconds=offset_seconds)
 
-            print(f'done with inference')
-            # Return the results as a JSON object
             return Output(segments=segments)
 
         except Exception as e:
-            raise RuntimeError("Error Running inference with local model", e)
+            print(e)
 
         finally:
             # Clean up
